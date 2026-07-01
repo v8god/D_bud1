@@ -1,0 +1,242 @@
+import type { AnimationProfile } from "../types/AnimationProfiles";
+
+const IDENTITY = { offsetX: 0, offsetY: 0, scale: 1, rotation: 0 } as const;
+
+export const ANIMATION_PROFILES: Readonly<Record<string, AnimationProfile>> = {
+  idle_neutral: {
+    stateId: "idle_neutral",
+    priority: 10,
+    durationMs: null,
+    interruption: "higher-or-equal",
+  },
+  soft_smile: {
+    stateId: "soft_smile",
+    priority: 20,
+    durationMs: 1800,
+    interruption: "higher-or-equal",
+    returnState: "idle_neutral",
+  },
+  happy: {
+    stateId: "happy",
+    priority: 30,
+    durationMs: 1900,
+    interruption: "higher-or-equal",
+    returnState: "idle_neutral",
+    rootMotion: [
+      { at: 0, transform: IDENTITY },
+      { at: 0.25, transform: { offsetY: -12, rotation: -0.018 }, easing: "ease-out" },
+      { at: 0.55, transform: { offsetY: 0, rotation: 0.018 }, easing: "ease-in-out" },
+      { at: 1, transform: IDENTITY, easing: "ease-out" },
+    ],
+  },
+  closed_eye_smile: {
+    stateId: "closed_eye_smile",
+    priority: 40,
+    durationMs: 1200,
+    interruption: "higher-or-equal",
+    returnState: "idle_neutral",
+    rootMotion: [
+      { at: 0, transform: IDENTITY },
+      { at: 0.35, transform: { offsetY: -24, scale: 1.025 }, easing: "back-out" },
+      { at: 1, transform: IDENTITY, easing: "ease-out" },
+    ],
+  },
+  excited: {
+    stateId: "excited",
+    priority: 65,
+    durationMs: 1150,
+    interruption: "higher-or-equal",
+    returnState: "idle_neutral",
+    rootMotion: [
+      { at: 0, transform: IDENTITY },
+      { at: 0.12, transform: { offsetY: 10, scale: 0.97 }, easing: "ease-in" },
+      { at: 0.36, transform: { offsetY: -72, scale: 1.045, rotation: -0.025 }, easing: "ease-out" },
+      { at: 0.58, transform: { offsetY: -48, scale: 1.025, rotation: 0.025 }, easing: "ease-in-out" },
+      { at: 0.84, transform: { offsetY: 6, scale: 0.985 }, easing: "ease-in" },
+      { at: 1, transform: IDENTITY, easing: "back-out" },
+    ],
+  },
+  celebrate: {
+    stateId: "celebrate",
+    priority: 80,
+    durationMs: 1650,
+    interruption: "higher-or-equal",
+    returnState: "idle_neutral",
+    rootMotion: [
+      { at: 0, transform: IDENTITY },
+      { at: 0.08, transform: { offsetY: 14, scale: 0.955 }, easing: "ease-in" },
+      { at: 0.28, transform: { offsetY: -104, scale: 1.06, rotation: -0.04 }, easing: "ease-out" },
+      { at: 0.45, transform: { offsetY: -76, scale: 1.035, rotation: 0.035 }, easing: "ease-in-out" },
+      { at: 0.58, transform: { offsetY: -112, scale: 1.065, rotation: -0.025 }, easing: "ease-out" },
+      { at: 0.82, transform: { offsetY: 10, scale: 0.97, rotation: 0.015 }, easing: "ease-in" },
+      { at: 1, transform: IDENTITY, easing: "back-out" },
+    ],
+  },
+  curious: {
+    stateId: "curious",
+    priority: 92,
+    durationMs: 1100,
+    interruption: "always",
+    returnState: "idle_neutral",
+    rootMotion: [
+      { at: 0, transform: IDENTITY },
+      { at: 0.14, transform: { offsetX: -18, offsetY: -24, rotation: -0.055, scale: 1.055 }, easing: "back-out" },
+      { at: 0.42, transform: { offsetX: 28, offsetY: -10, rotation: 0.065, scale: 1.025 }, easing: "ease-in-out" },
+      { at: 0.72, transform: { offsetX: -7, offsetY: 2, rotation: -0.018, scale: 0.995 }, easing: "ease-in-out" },
+      { at: 1, transform: IDENTITY, easing: "back-out" },
+    ],
+  },
+  surprised: {
+    stateId: "surprised",
+    priority: 75,
+    durationMs: 950,
+    interruption: "higher-or-equal",
+    returnState: "idle_neutral",
+    rootMotion: [
+      { at: 0, transform: IDENTITY },
+      { at: 0.2, transform: { offsetX: -22, offsetY: -18, scale: 1.035, rotation: -0.025 }, easing: "back-out" },
+      { at: 0.55, transform: { offsetX: 8, offsetY: 0, scale: 0.99, rotation: 0.015 }, easing: "ease-in-out" },
+      { at: 1, transform: IDENTITY, easing: "ease-out" },
+    ],
+  },
+  notification: {
+    stateId: "notification",
+    priority: 78,
+    durationMs: 900,
+    interruption: "higher-or-equal",
+    returnState: "idle_neutral",
+    rootMotion: [
+      { at: 0, transform: IDENTITY },
+      { at: 0.14, transform: { offsetX: -24, offsetY: -34, scale: 1.055, rotation: -0.045 }, easing: "back-out" },
+      { at: 0.38, transform: { offsetX: 9, offsetY: -6, scale: 0.99, rotation: 0.025 }, easing: "ease-in-out" },
+      { at: 0.68, transform: { offsetX: -4, offsetY: 2, scale: 1.008, rotation: -0.01 }, easing: "ease-in-out" },
+      { at: 1, transform: IDENTITY, easing: "ease-out" },
+    ],
+  },
+  friend_online: {
+    stateId: "friend_online",
+    priority: 70,
+    durationMs: 1600,
+    interruption: "higher-or-equal",
+    returnState: "idle_neutral",
+  },
+  ai_waiting: {
+    stateId: "ai_waiting",
+    priority: 45,
+    durationMs: null,
+    interruption: "higher-or-equal",
+  },
+  ai_completed: {
+    stateId: "ai_completed",
+    priority: 85,
+    durationMs: 1400,
+    interruption: "higher-or-equal",
+    returnState: "idle_neutral",
+    rootMotion: [
+      { at: 0, transform: IDENTITY },
+      { at: 0.22, transform: { offsetY: -48, scale: 1.045 }, easing: "back-out" },
+      { at: 0.5, transform: { offsetY: 4, scale: 0.985 }, easing: "ease-in" },
+      { at: 0.72, transform: { offsetY: -18, scale: 1.018 }, easing: "ease-out" },
+      { at: 1, transform: IDENTITY, easing: "ease-out" },
+    ],
+  },
+  sleepy: {
+    stateId: "sleepy",
+    priority: 25,
+    durationMs: null,
+    interruption: "higher-or-equal",
+  },
+  sleep: {
+    stateId: "sleep",
+    priority: 30,
+    durationMs: null,
+    interruption: "higher-or-equal",
+  },
+  wake_up: {
+    stateId: "wake_up",
+    priority: 90,
+    durationMs: 2050,
+    interruption: "higher-or-equal",
+    returnState: "idle_neutral",
+    rootMotion: [
+      { at: 0, transform: { offsetY: 12, scale: 0.98, rotation: -0.02 } },
+      { at: 0.35, transform: { offsetY: -26, scale: 1.035, rotation: 0.02 }, easing: "back-out" },
+      { at: 0.7, transform: { offsetY: -8, scale: 1.012, rotation: -0.01 }, easing: "ease-in-out" },
+      { at: 1, transform: IDENTITY, easing: "ease-out" },
+    ],
+  },
+  typing: {
+    stateId: "typing",
+    priority: 40,
+    durationMs: null,
+    interruption: "higher-or-equal",
+  },
+  thinking: {
+    stateId: "thinking",
+    priority: 40,
+    durationMs: null,
+    interruption: "higher-or-equal",
+  },
+  focused: {
+    stateId: "focused",
+    priority: 40,
+    durationMs: null,
+    interruption: "higher-or-equal",
+  },
+  low_battery: {
+    stateId: "low_battery",
+    priority: 95,
+    durationMs: null,
+    interruption: "higher-or-equal",
+  },
+  dragged: {
+    stateId: "dragged",
+    priority: 88,
+    durationMs: null,
+    interruption: "always",
+    rootMotion: [
+      { at: 0, transform: IDENTITY },
+      { at: 0.5, transform: { rotation: -0.035, scale: 1.015 }, easing: "ease-in-out" },
+      { at: 1, transform: { rotation: 0.035, scale: 1.015 }, easing: "ease-in-out" },
+    ],
+  },
+  dropped: {
+    stateId: "dropped",
+    priority: 99,
+    durationMs: 1750,
+    interruption: "always",
+    returnState: "idle_neutral",
+    rootMotion: [
+      { at: 0, transform: { offsetY: -38, scale: 1.02, rotation: -0.06 } },
+      { at: 0.28, transform: { offsetY: 48, scale: 0.955, rotation: 0.03 }, easing: "ease-in" },
+      { at: 0.48, transform: { offsetY: -18, scale: 1.025, rotation: -0.015 }, easing: "back-out" },
+      { at: 0.72, transform: { offsetY: 8, scale: 0.99, rotation: 0.008 }, easing: "ease-in-out" },
+      { at: 1, transform: IDENTITY, easing: "ease-out" },
+    ],
+  },
+  thrown: {
+    stateId: "thrown",
+    priority: 100,
+    durationMs: 850,
+    interruption: "always",
+    returnState: "idle_neutral",
+    rootMotion: [
+      { at: 0, transform: IDENTITY },
+      { at: 0.35, transform: { offsetY: -50, rotation: -0.22, scale: 1.02 }, easing: "ease-out" },
+      { at: 0.7, transform: { offsetY: 42, rotation: 0.18, scale: 0.98 }, easing: "ease-in" },
+      { at: 1, transform: IDENTITY, easing: "back-out" },
+    ],
+  },
+};
+
+export function getAnimationProfile(stateId: string): AnimationProfile {
+  return (
+    ANIMATION_PROFILES[stateId] ?? {
+      stateId,
+      priority: 50,
+      durationMs: 1500,
+      interruption: "higher-or-equal",
+      returnState: "idle_neutral",
+    }
+  );
+}

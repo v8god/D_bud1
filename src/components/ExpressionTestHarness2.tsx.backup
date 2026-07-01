@@ -1,0 +1,389 @@
+import { useState, useEffect, useRef } from "react";
+import * as PIXI from "pixi.js";
+import { Application } from "pixi.js";
+import { getCurrentWindow } from "@tauri-apps/api/window";
+
+import * as _live2dNS from "pixi-live2d-display-advanced/cubism4";
+const _live2d = _live2dNS as unknown as typeof import("pixi-live2d-display-advanced");
+const Live2DModel = _live2d.Live2DModel;
+_live2d.config.sound = false;
+
+type ModelWithTransform = InstanceType<typeof Live2DModel> & {
+  position: { set(x: number, y: number): void };
+  scale: { set(s: number): void };
+  anchor: { set(x: number, y: number): void };
+};
+
+const EXPRESSION_GROUPS = [
+  { label: "Happy", color: "#f59e0b", expressions: ["happy", "soft_smile", "excited", "celebrate", "closed_eye_smile"] },
+  { label: "Neutral/Cognitive", color: "#6366f1", expressions: ["idle_neutral", "curious", "thinking", "focused"] },
+  { label: "Negative", color: "#ef4444", expressions: ["angry", "annoyed", "disgusted"] },
+  { label: "Emotional", color: "#8b5cf6", expressions: ["sad", "crying", "tear_drop", "embarrassed", "proud", "surprised"] },
+  { label: "Sleep States", color: "#0ea5e9", expressions: ["sleepy", "sleep", "wake_up"] },
+  { label: "Events", color: "#10b981", expressions: ["notification", "ai_waiting", "ai_completed", "typing", "dragged", "thrown", "low_battery", "friend_online"] },
+  { label: "Built-in Params", color: "#f97316", expressions: ["squint_xx"] },
+];
+
+const MOTION_GROUPS = [
+  { group: "Idle", motions: ["idle_breathing", "idle_headbob"] },
+  { group: "Reactions", motions: ["reaction_nod", "reaction_shake", "reaction_surprised", "reaction_tap", "reaction_drag", "reaction_drop"] },
+  { group: "Sleep", motions: ["sleep_enter", "sleep_loop", "sleep_exit"] },
+  { group: "AI", motions: ["ai_thinking_loop", "ai_complete_bounce"] },
+  { group: "Celebrate", motions: ["celebrate_jump"] },
+  { group: "Typing", motions: ["typing_look"] },
+];
+
+const MODEL_PATH = "/assets/character/yachiyo.model3.json";
+
+// function patchDrawableRenderOrders(model: any) {
+//   const coreModel = model?.internalModel?.coreModel;
+//   if (!coreModel) return;
+
+//   const original = coreModel.getDrawableRenderOrders?.bind(coreModel);
+
+//   coreModel.getDrawableRenderOrders = () => {
+//     const existing = original?.();
+
+//     if (existing && existing.length) return existing;
+
+//     const count = coreModel.getDrawableCount?.() ?? 0;
+//     const fallback = new Int32Array(count);
+
+//     for (let i = 0; i < count; i++) {
+//       fallback[i] = i;
+//     }
+
+//     return fallback;
+//   };
+// }
+
+function patchDrawableRenderOrders(model: any) {
+  const coreModel = model?.internalModel?.coreModel;
+  if (!coreModel) return;
+
+  const originalRenderOrders = coreModel.getDrawableRenderOrders?.bind(coreModel);
+  const getDrawOrders = coreModel.getDrawableDrawOrders?.bind(coreModel);
+
+  coreModel.getDrawableRenderOrders = () => {
+    const existing = originalRenderOrders?.();
+    if (existing && existing.length) return existing;
+
+    const count = coreModel.getDrawableCount?.() ?? 0;
+    const drawOrders = getDrawOrders?.();
+
+    const sorted = Array.from({ length: count }, (_, i) => i).sort((a, b) => {
+      const da = drawOrders?.[a] ?? 0;
+      const db = drawOrders?.[b] ?? 0;
+      return da - db || a - b;
+    });
+
+    return Int32Array.from(sorted);
+  };
+}
+
+// function forceFrontFacing(model: any) {
+//   const core = model?.internalModel?.coreModel;
+//   if (!core) return;
+
+//   const set = (id: string, value: number) => {
+//     try {
+//       core.setParameterValueById(id, value);
+//     } catch { }
+//   };
+
+//   set("ParamAngleX", 0);
+//   set("ParamAngleY", 0);
+//   set("ParamAngleZ", 0);
+//   set("ParamBodyAngleX", 0);
+//   set("ParamBodyAngleY", 0);
+//   set("ParamBodyAngleZ", 0);
+
+//   core.update?.();
+// }
+
+function forceFrontFacing(model: any) {
+  const core = model?.internalModel?.coreModel;
+  if (!core) return;
+
+  const set = (id: string, value: number) => {
+    try { core.setParameterValueById(id, value); } catch { }
+  };
+
+  set("ParamSwitchCtrl_BodyX", 0);
+  set("ParamSwitchCtrl_BodyY", 0);
+  set("ParamSwitchCtrl_BodyZ", 0);
+
+  set("ParamAngleX", 0);
+  set("ParamAngleY", 0);
+  set("ParamAngleZ", 0);
+  set("ParamAngle_HeadX", 1);
+  set("ParamAngle_HeadY", 1);
+  set("ParamAngle_HeadZ", 1);
+  set("ParamAngle_BodyX", 0);
+  set("ParamAngle_BodyY", 0);
+  set("ParamAngle_BodyZ", 0);
+
+  set("ParamSwitchCtrl_HeadX", 1);
+  set("ParamSwitchCtrl_HeadY", 1);
+  set("ParamSwitchCtrl_HeadZ", 1);
+
+  core.update?.();
+}
+
+export default function ExpressionTestHarness() {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const modelRef = useRef<ModelWithTransform | null>(null);
+  const appRef = useRef<Application | null>(null);
+
+  const [activeExpr, setActiveExpr] = useState("idle_neutral");
+  const [activeMotion, setActiveMotion] = useState<string | null>(null);
+  const [log, setLog] = useState<string[]>(["Initialising…"]);
+  const [loaded, setLoaded] = useState(false);
+  const [tab, setTab] = useState<"expressions" | "motions">("expressions");
+
+  const pushLog = (msg: string) =>
+    setLog(prev => [`[${new Date().toLocaleTimeString()}] ${msg}`, ...prev.slice(0, 49)]);
+
+  const startDrag = async () => {
+    try {
+      await getCurrentWindow().startDragging();
+    } catch (e) {
+      pushLog(`⚠ Drag failed: ${(e as Error).message}`);
+    }
+  };
+
+  useEffect(() => {
+    if (!canvasRef.current) return;
+
+    let cancelled = false;
+    let app: Application | null = null;
+
+    try {
+      app = new Application({
+        view: canvasRef.current,
+        width: 500,
+        height: 600,
+        backgroundAlpha: 0,
+        antialias: true,
+        resolution: 1,
+        autoDensity: false,
+        autoStart: false,
+      });
+
+      appRef.current = app;
+      (window as any).PIXI = PIXI;
+
+      pushLog("✓ PixiJS ready");
+    } catch (e) {
+      pushLog(`✗ PixiJS failed: ${(e as Error).message}`);
+      return;
+    }
+
+    pushLog(`Loading: ${MODEL_PATH}`);
+
+    Live2DModel.from(MODEL_PATH, {
+      autoHitTest: false,
+      autoFocus: false,
+      autoUpdate: false,
+      // autoUpdate: true,
+    })
+      .then((model) => {
+        if (cancelled || !app) return;
+
+        pushLog("✓ Model received");
+
+        patchDrawableRenderOrders(model);
+        pushLog("✓ Drawable renderOrders patched");
+
+        forceFrontFacing(model);
+        pushLog("✓ Forced front-facing pose");
+
+        const m = model as unknown as ModelWithTransform;
+        modelRef.current = m;
+
+        (window as any).__live2dModel = model;
+
+        app.stage.addChild(model as any);
+
+        m.anchor.set(0.5, 0.5);
+        m.position.set(app.screen.width / 2, app.screen.height / 2);
+
+        // ── Fix: disable body-switching physics mode ──────────────────────────────
+        const core = model.internalModel.coreModel as any;
+        core.setParameterValueById('ParamSwitchCtrl_BodyX', 0);
+        core.setParameterValueById('ParamSwitchCtrl_BodyY', 0);
+        core.setParameterValueById('ParamSwitchCtrl_BodyZ', 0);
+        core.setParameterValueById('ParamSwitchCtrl_ChestZ', 0);
+        core.setParameterValueById('ParamSwitchCtrl_HipZ', 0);
+
+        // ── Fix: keep them at 0 every frame — physics would re-set them otherwise ─
+        const origUpdate = (model.internalModel as any).update.bind(model.internalModel);
+        (model.internalModel as any).update = function (dt: number) {
+          core.setParameterValueById('ParamSwitchCtrl_BodyX', 0);
+          core.setParameterValueById('ParamSwitchCtrl_BodyY', 0);
+          core.setParameterValueById('ParamSwitchCtrl_BodyZ', 0);
+          core.setParameterValueById('ParamSwitchCtrl_ChestZ', 0);
+          core.setParameterValueById('ParamSwitchCtrl_HipZ', 0);
+          origUpdate(dt);
+        };
+
+        const scale = Math.min(
+          app.screen.width / model.internalModel.originalWidth,
+          app.screen.height / model.internalModel.originalHeight
+        ) * 0.9;
+
+        m.scale.set(scale);
+        pushLog(`✓ Transform applied (scale: ${scale.toFixed(3)})`);
+
+        // app.ticker.add(() => {
+        //   model.update(app!.ticker.deltaMS);
+        // }, undefined, PIXI.UPDATE_PRIORITY.HIGH);
+
+        setLoaded(true);
+        pushLog("✓ Model live");
+
+        app.start();
+        pushLog("✓ Ticker started");
+
+
+        setTimeout(() => {
+          try {
+            model.motion("Idle", 0);
+            setActiveMotion("idle_breathing");
+            pushLog("▶ Idle[0] idle_breathing");
+          } catch (e) {
+            pushLog(`⚠ idle motion failed: ${(e as Error).message}`);
+          }
+        }, 500);
+
+        // IMPORTANT: Do not play motion yet.
+        // Generated motion files may still be invalid.
+        // First make the model visible.
+      })
+      .catch((e: Error) => {
+        if (!cancelled) pushLog(`✗ Failed: ${e.message}`);
+      });
+
+    return () => {
+      cancelled = true;
+      app?.stop();
+      app?.destroy(false, { children: true });
+    };
+  }, []);
+
+  const playExpression = (name: string) => {
+    if (!modelRef.current) { pushLog("✗ Not ready"); return; }
+    try {
+      (modelRef.current as InstanceType<typeof Live2DModel>).expression(name);
+      setActiveExpr(name);
+      pushLog(`😊 ${name}`);
+    } catch (e) { pushLog(`✗ ${name}: ${(e as Error).message}`); }
+  };
+
+  const playMotion = (group: string, name: string) => {
+    if (!modelRef.current) { pushLog("✗ Not ready"); return; }
+    const grp = MOTION_GROUPS.find(g => g.group === group);
+    const idx = grp ? grp.motions.indexOf(name) : 0;
+    try {
+      (modelRef.current as InstanceType<typeof Live2DModel>).motion(group, idx);
+      setActiveMotion(name);
+      pushLog(`🎬 ${group}[${idx}] ${name}`);
+    } catch (e) { pushLog(`✗ ${name}: ${(e as Error).message}`); }
+  };
+
+  const resetIdle = () => {
+    playExpression("idle_neutral");
+    playMotion("Idle", "idle_breathing");
+    setActiveMotion(null);
+  };
+
+  return (
+    <div style={S.root}>
+      <div style={S.canvasPanel}>
+        <div style={S.canvasHeader} onMouseDown={startDrag}>
+          <span style={S.modelName}>八千代辉夜姬</span>
+          <span style={{ ...S.badge, background: loaded ? "#10b981" : "#6b7280" }}>
+            {loaded ? "● Live" : "● Loading…"}
+          </span>
+        </div>
+        <canvas ref={canvasRef} style={S.canvas} />
+        <div style={S.activeLabel}>
+          Expr: <b>{activeExpr}</b>
+          {activeMotion && <span style={{ marginLeft: 12 }}>Motion: <b>{activeMotion}</b></span>}
+        </div>
+        <button onClick={resetIdle} style={S.resetBtn}>↺ Reset to Idle</button>
+      </div>
+
+      <div style={S.controlPanel}>
+        <div style={S.tabs}>
+          {(["expressions", "motions"] as const).map(t => (
+            <button key={t} onClick={() => setTab(t)}
+              style={{ ...S.tab, ...(tab === t ? S.tabActive : {}) }}>
+              {t === "expressions" ? "😊 Expressions" : "🎬 Motions"}
+            </button>
+          ))}
+        </div>
+
+        <div style={S.scrollArea}>
+          {tab === "expressions" && EXPRESSION_GROUPS.map(g => (
+            <div key={g.label} style={S.group}>
+              <div style={{ ...S.groupLabel, borderColor: g.color, color: g.color }}>{g.label}</div>
+              <div style={S.btnRow}>
+                {g.expressions.map(name => (
+                  <button key={name} onClick={() => playExpression(name)} style={{
+                    ...S.exprBtn,
+                    background: activeExpr === name ? g.color : "#1e1e2e",
+                    borderColor: g.color,
+                    color: activeExpr === name ? "#fff" : g.color,
+                  }}>{name}</button>
+                ))}
+              </div>
+            </div>
+          ))}
+
+          {tab === "motions" && MOTION_GROUPS.map(g => (
+            <div key={g.group} style={S.group}>
+              <div style={{ ...S.groupLabel, borderColor: "#818cf8", color: "#818cf8" }}>{g.group}</div>
+              <div style={S.btnRow}>
+                {g.motions.map(name => (
+                  <button key={name} onClick={() => playMotion(g.group, name)} style={{
+                    ...S.exprBtn,
+                    background: activeMotion === name ? "#818cf8" : "#1e1e2e",
+                    borderColor: "#818cf8",
+                    color: activeMotion === name ? "#fff" : "#818cf8",
+                  }}>{name}</button>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div style={S.logBox}>
+          {log.map((l, i) => <div key={i} style={S.logLine}>{l}</div>)}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const S: Record<string, React.CSSProperties> = {
+  root: { display: "flex", height: "100vh", background: "#0f0f1a", color: "#e2e8f0", fontFamily: "'Inter',system-ui,sans-serif", fontSize: 13, overflow: "hidden" },
+  canvasPanel: { display: "flex", flexDirection: "column", alignItems: "center", padding: "16px 12px", borderRight: "1px solid #2a2a3e", minWidth: 520, background: "#13131f" },
+  canvasHeader: { display: "flex", alignItems: "center", gap: 10, marginBottom: 10, width: "100%", justifyContent: "center", cursor: "move", userSelect: "none" },
+  modelName: { fontWeight: 700, fontSize: 15, letterSpacing: 1 },
+  badge: { borderRadius: 99, padding: "2px 10px", fontSize: 11, fontWeight: 600, color: "#fff" },
+  canvas: { borderRadius: 16, background: "linear-gradient(135deg,#1a1a2e 0%,#16213e 100%)", boxShadow: "0 8px 32px rgba(0,0,0,0.5)", width: 500, height: 600 },
+  activeLabel: { marginTop: 10, fontSize: 12, color: "#94a3b8", textAlign: "center" },
+  resetBtn: { marginTop: 12, padding: "8px 24px", background: "#2a2a3e", border: "1px solid #4a4a6e", borderRadius: 8, color: "#cbd5e1", cursor: "pointer", fontWeight: 600 },
+  controlPanel: { flex: 1, display: "flex", flexDirection: "column", padding: "16px 16px 0", overflow: "hidden" },
+  tabs: { display: "flex", gap: 8, marginBottom: 12 },
+  tab: { flex: 1, padding: "8px 0", background: "#1e1e2e", border: "1px solid #2a2a3e", borderRadius: 8, color: "#64748b", cursor: "pointer", fontWeight: 600, fontSize: 13 },
+  tabActive: { background: "#2a2a3e", color: "#e2e8f0", borderColor: "#4a4a6e" },
+  scrollArea: { flex: 1, overflowY: "auto", paddingRight: 4 },
+  group: { marginBottom: 16 },
+  groupLabel: { fontSize: 11, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", borderLeft: "3px solid", paddingLeft: 8, marginBottom: 8 },
+  btnRow: { display: "flex", flexWrap: "wrap", gap: 6 },
+  exprBtn: { padding: "5px 12px", border: "1px solid", borderRadius: 6, cursor: "pointer", fontWeight: 600, fontSize: 12, transition: "all 0.15s ease" },
+  logBox: { marginTop: 12, borderTop: "1px solid #2a2a3e", paddingTop: 10, paddingBottom: 10, height: 140, overflowY: "auto", fontFamily: "monospace", fontSize: 11, color: "#64748b" },
+  logLine: { lineHeight: "1.6", borderBottom: "1px solid #1e1e2e", paddingBottom: 1 },
+};
